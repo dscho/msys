@@ -1,7 +1,17 @@
+#include "compat.h"
+
 #include <stdio.h>
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
 
 #include "defs.h"
 #include "gripes.h"
@@ -41,10 +51,10 @@ usage (void) {
 
 static char short_opts[] = "B:C:H:xM:P:S:acdfFhkKm:p:s:tvVwW?";
 
-#ifndef NOGETOPT
-#undef _GNU_SOURCE
-#define _GNU_SOURCE
-#include <getopt.h>
+#ifdef HAVE_GETOPT_H
+# undef _GNU_SOURCE
+# define _GNU_SOURCE
+# include <getopt.h>
 
 static const struct option long_opts[] = {
     { "help",       no_argument,            NULL, 'h' },
@@ -53,7 +63,7 @@ static const struct option long_opts[] = {
     { "preformat",  no_argument,            NULL, 'F' },
     { NULL, 0, NULL, 0 }
 };
-#endif
+#endif /* HAVE_GETOPT_H */
 
 /*
  * Read options, return count.
@@ -65,7 +75,7 @@ get_options_from_argvec(int argc, char **argv, char **config_file,
      int c;
      int optct = 0;
 
-#ifndef NOGETOPT
+#ifdef HAVE_GETOPT_LONG
      while ((c = getopt_long (argc, argv, short_opts, long_opts, NULL)) != -1){
 #else
      while ((c = getopt (argc, argv, short_opts)) != -1) {
@@ -231,13 +241,13 @@ get_options_from_string(const char *s) {
 
 static void 
 mysetenv(const char *name, const char *value) {
-#if defined(__sgi__) || defined(__sun__) || defined(sun)
+#ifdef HAVE_SETENV
+    setenv(name, value, 1);
+#else
     int len = strlen(value)+1+strlen(value)+1;
     char *str = my_malloc(len);
     sprintf(str, "%s=%s", name, value);
     putenv(str);
-#else
-    setenv(name, value, 1);
 #endif
 }
 
@@ -288,7 +298,7 @@ man_getopt (int argc, char **argv) {
      if (debug)
 	  gripe (BROWSER_IS, browser);
 
-     /* Ditto for HTMLHTMLPAGER and -D */
+     /* Ditto for HTMLPAGER and -H */
      if (htmlpager && (global_apropos || apropos || whatis))
 	 mysetenv("HTMLPAGER", htmlpager);
 

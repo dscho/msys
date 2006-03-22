@@ -18,25 +18,60 @@
  * Some more fixes, Pauline Middelink & aeb, Oct 1994
  * man -K: aeb, Jul 1995
  * Split off of manfile for man2html, aeb, New Year's Eve 1997
+ * Portability enhancements - kdm, June 2005
  */
+#include "compat.h"
 
 #include <stdio.h>
 #include <ctype.h>
+
+#if defined(HAVE_STRING_H)
 #include <string.h>
+#elif defined(HAVE_STRINGS_H)
+#include <strings.h>
+#endif
+
+#ifdef HAVE_STDLIB_H
 #include <stdlib.h>
+#endif
+
+#ifdef HAVE_SYS_FILE_H
 #include <sys/file.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>		/* for chmod */
+#endif
+
 #include <signal.h>
 #include <errno.h>
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_LOCALE_H
 #include <locale.h>
+#endif
 
 #ifndef R_OK
 #define R_OK 4
 #endif
 
-extern char *index (const char *, int);		/* not always in <string.h> */
-extern char *rindex (const char *, int);	/* not always in <string.h> */
+/* if we don't have the strchr() and strrchr() functions,
+ * then we must fall back to index() and rindex() respectively,
+ * but (apparently) these aren't always prototyped in string.h
+ */
+#ifndef index
+/* i.e. NOT using strchr()
+ */
+extern char *index (const char *, int);
+#endif
+#ifndef rindex
+/* i.e. NOT using strrchr()
+ */
+extern char *rindex (const char *, int);
+#endif
 
 #include "defs.h"
 #include "gripes.h"
@@ -99,7 +134,9 @@ int do_compress = 0;
  * joey, 950902
  */
 
-#include <sys/ioctl.h>
+#ifdef HAVE_SYS_IOCTL_H
+# include <sys/ioctl.h>
+#endif
 
 int line_length = 80;
 int ll = 0;
@@ -571,7 +608,10 @@ make_roff_command (const char *path, const char *file) {
 		* We should set line length and title line length.
 		* However, a .lt command here fails, only
 		*  .ev 1; .lt ...; .ev helps for my version of groff.
-		* The LL assignment is needed by the mandoc macros.
+		* (The LL assignment is needed by the mandoc macros
+                *  provided with groff versions 1.18 through 1.19.1;
+                *  neither earlier nor later versions require this,
+                *  but we keep it to support those versions).
 		*/
 	       sprintf(eos(bufh), "echo \".ll %d.%di\"; ", ll/10, ll%10);
 	       sprintf(eos(bufh), "echo \".nr LL %d.%di\"; ", ll/10, ll%10);
@@ -990,7 +1030,8 @@ man (const char *name, const char *section) {
 	       return 0;
 	  }
 	  fclose (fp);
-	  if (*name != '/' && getcwd(fullname, sizeof(fullname))
+	  if ( ! IS_ABSOLUTE_PATH(name)
+              && getcwd(fullname, sizeof(fullname))
 	      && strlen(fullname) + strlen(name) + 3 < sizeof(fullname)) {
 	       strcat (fullname, "/");
 	       strcat (fullname, name);
@@ -1001,7 +1042,7 @@ man (const char *name, const char *section) {
 	       return 0;
 	  }
 
-	  strcpy (fullpath, fullname);
+	  strcpy (fullpath, POSIX_STYLE_PATH(fullname));
 	  if ((cp = rindex(fullpath, '/')) != NULL
 	      && cp-fullpath+4 < sizeof(fullpath)) {
 	       strcpy(cp+1, "..");
@@ -1138,13 +1179,11 @@ do_global_apropos (char *name, char *section) {
 	       for( ; *gf; gf++) {
 		    const char *expander = get_expander (*gf);
 		    if (expander)
-			 command = my_xsprintf("%s %S | grep '%Q'"
-					       "> /dev/null 2> /dev/null",
-				 expander, *gf, name);
+			 command = my_xsprintf("%s %S | grep %s '%Q'",
+				 expander, *gf, GREPSILENT, name);
 		    else
-			 command = my_xsprintf("grep '%Q' %S"
-					       "> /dev/null 2> /dev/null",
-				 name, *gf);
+			 command = my_xsprintf("grep %s '%Q' %S",
+				 GREPSILENT, name, *gf);
 		    res = do_system_command (command, 1);
 		    status |= res;
 		    free (command);
@@ -1257,9 +1296,16 @@ main (int argc, char **argv) {
 #endif
 
 
-#ifndef __FreeBSD__ 
-     /* Slaven Rezif: FreeBSD-2.2-SNAP does not recognize LC_MESSAGES. */
+/* #ifndef __FreeBSD__  */
+/* Slaven Rezif: FreeBSD-2.2-SNAP does not recognize LC_MESSAGES. */
+/* Keith Marshall: neither does MinGW, but why be platform specific?
+ *   Don't setlocale for either of LC_CTYPE or LC_MESSAGES,
+ *   unless they are defined
+ */
+#ifdef LC_CTYPE
      setlocale(LC_CTYPE, "");	/* used anywhere? maybe only isdigit()? */
+#endif
+#ifdef LC_MESSAGES
      setlocale(LC_MESSAGES, "");
 #endif
 
@@ -1274,8 +1320,15 @@ main (int argc, char **argv) {
      if (getenv("MAN_IRIX_CATNAMES"))
 	  do_irix = 1;
 
-     /* Handle lack of ':' in NTFS file names */
 #if defined(_WIN32) || defined(__CYGWIN__)
+/*
+ * These run on an OS with a Microsoft file system,
+ * which does not allow ':' in file names, other than as
+ * the separator following a device designator; set a flag
+ * so to remind us to handle this nuisance.
+ *
+ * FIXME: this should be handled in `compat.h'
+ */
      do_win32 = 1;
 #endif
 
@@ -1304,7 +1357,7 @@ main (int argc, char **argv) {
      section_list = get_section_list ();
 
      while (optind < argc) {
-	  nextarg = argv[optind++];
+	  nextarg = POSIX_STYLE_PATH(argv[optind++]);
 
 	  /* is_section correctly accepts 3Xt as section, but also 9wm,
 	     so we should not believe is_section() for the last arg. */
