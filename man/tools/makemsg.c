@@ -17,14 +17,43 @@
  * or
  *	makemsg -c input message_catalog
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#ifdef __QNX__
-#include <unix.h>
+
+#ifdef HAVE_CONFIG_H
+# include "config.h"
 #endif
+
+#include <stdio.h>
+#ifdef HAVE_STDLIB_H
+# include <stdlib.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+# include <unistd.h>
+#endif
+
+#ifdef __QNX__
+# include <unix.h>
+#endif
+
+#ifdef HAVE_STRING_H
+# include <string.h>
+ /*
+  * Prefer `strchr' and `strrchr' to `index' and `rindex',
+  * when we have them.
+  */
+
+# ifdef HAVE_STRCHR
+#  define index  strchr
+# endif
+
+# ifdef HAVE_STRRCHR
+#  define rindex strrchr
+# endif
+
+#else
 extern char *index(const char *, int);
 extern char *rindex(const char *, int);
+#endif
 
 #define BUFSIZE 4096
 

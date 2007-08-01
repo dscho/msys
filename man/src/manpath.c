@@ -20,16 +20,41 @@
  * aeb - 940315
  */
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include "compat.h"
 
-/* not always in <string.h> */
-extern char *index(const char *, int);
-extern char *rindex(const char *, int);
+#include <stdio.h>
+
+#ifdef STDC_HEADERS
+# include <stdlib.h>
+# include <string.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
+
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
+/* if we don't have the strchr() and strrchr() functions,
+ * then we must fall back to index() and rindex() respectively,
+ * but (apparently) these aren't always prototyped in string.h
+ */
+#ifndef index
+/* i.e. NOT using strchr()
+ */
+extern char *index (const char *, int);
+#endif
+#ifndef rindex
+/* i.e. NOT using strrchr()
+ */
+extern char *rindex (const char *, int);
+#endif
 
 #include "defs.h"
 #include "gripes.h"
@@ -44,7 +69,7 @@ static int mandirlistlth = 0;
 static int mandirlistmax = 0;
 
 /*
- * Input: a string, with : as separator
+ * Input: a string, with PATH_SEPARATOR_CHAR as separator
  * For each entry in the string, call fn.
  */
 static void
@@ -52,10 +77,10 @@ split (char *string, void (*fn)(char *, int), int perrs) {
      char *p, *q, *r;
 
      if (string) {
-          p = my_strdup(string);
+          p = my_strdup (POSIX_STYLE_PATH (string));
 	  for (q = p; ; ) {
-               if ((r = index(q, ':'))==(char*)0) 
-                    r=index(q,'\01');
+               if ((r = index(q, PATH_SEPARATOR_CHAR)) == (char*)(0)) 
+                    r=index(q, '\01');
 	       if (r) {
 		    *r = 0;
 		    fn (q, perrs);
@@ -74,9 +99,9 @@ split2 (char *s, char *string, void (*fn)(char *, char *, int), int perrs) {
      char *p, *q, *r;
 
      if (string) {
-          p = my_strdup(string);
+          p = my_strdup (POSIX_STYLE_PATH (string));
 	  for (q = p; ; ) {
-	       r = index(q, ':');
+	       r = index(q, PATH_SEPARATOR_CHAR);
 	       if (r) {
 		    *r = 0;
 		    fn (s, q, perrs);
@@ -177,10 +202,10 @@ add_to_list (char *dir, char *lang, int perrs) {
 	  lang = "";
 
      /* only add absolute paths */
-     if (*dir != '/') {
+     if (! IS_ABSOLUTE_PATH (dir)) {
 	  if (!getcwd(cwd, sizeof(cwd)))
 	       return; /* cwd not readable, or pathname very long */
-	  if (cwd[0] != '/')
+	  if (! IS_ABSOLUTE_PATH (cwd))
 	       return; /* strange.. */
 	  if (strlen(dir) + strlen(lang) + strlen(cwd) + 3 > sizeof(cwd))
 	       return;
@@ -404,7 +429,7 @@ prmanpath () {
      if (mandirlist) {
 	  for (dp0 = dp = mandirlist; *dp; dp++) {
 	       if (dp != dp0)
-		    printf(":");
+		    putchar (PATH_SEPARATOR_CHAR);
 	       printf("%s", *dp);
 	  }
      }

@@ -1,8 +1,21 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "compat.h"
 
-extern char *rindex (const char *, int);	/* not always in <string.h> */
+#include <stdio.h>
+
+#ifdef STDC_HEADERS
+# include <stdlib.h>
+# include <string.h>
+#endif
+
+/* if we don't have the strrchr() function,
+ * then we must fall back to using the older rindex() function,
+ * but (apparently) this isn't always prototyped in string.h
+ */
+#ifndef rindex
+/* i.e. NOT using strrchr()
+ */
+extern char *rindex (const char *, int);
+#endif
 
 #include "defs.h"
 #include "manfile.h"
