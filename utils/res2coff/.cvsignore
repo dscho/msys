@@ -1,5 +1,0 @@
-*.obj
-*.dll
-Makefile
-Makefile.in
-.deps
